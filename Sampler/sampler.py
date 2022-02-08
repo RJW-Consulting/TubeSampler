@@ -31,6 +31,8 @@ class sampler():
         print('initilaizing sampler')
         self.errLogName = errLogName
         self.nullValue = nullValue
+        self.fatalErrors = ''
+        self.nonFatalErrors = ''
         self.currTube = 0
         # set up the power relays (PI relay board)
         self.Relay_Ch1 = 26
@@ -76,54 +78,17 @@ class sampler():
         self.tca = adafruit_tca9548a.TCA9548A(self.i2c)
         # plumbing pressure sensors are Adafruit MPRLS ported pressure sensors
         # For each mprls sensor, create it using the TCA9548A channel instead of the I2C object
-        try:
-            #self.mprls0 = adafruit_mprls.MPRLS(self.tca[0])
-            x=1
-        except Exception as err:
-            self.logError('Error initializing MPRLS 0, '+str(err))             
-            self.mprls0 = None
-        try:
-            self.mprls1 = adafruit_mprls.MPRLS(self.tca[1])
-        except Exception as err:
-            self.logError('Error initializing MPRLS 1, '+str(err))             
-            self.mprls1 = None
-        try:
-            self.mprls2 = adafruit_mprls.MPRLS(self.tca[2])
-        except Exception as err:
-            self.logError('Error initializing MPRLS 2, '+str(err))             
-            self.mprls2 = None
-        try:
-            self.mprls3 = adafruit_mprls.MPRLS(self.tca[3])
-        except Exception as err:
-            self.logError('Error initializing MPRLS 3, '+str(err))             
-            self.mprls3 = None
+        self.mprls0 = self.initMPRLS(self.tca[0],'0')
+        self.mprls1 = self.initMPRLS(self.tca[1],'1')
+        self.mprls2 = self.initMPRLS(self.tca[2],'2')
+        self.mprls3 = self.initMPRLS(self.tca[3],'3')
         # ambient pressure (plus temperature, humudity) sensors (Adafuit BME280) are mounted on the two
         # manifold modules, with thier I2C wiring on the multiplexed I2C channels for those
         # modules
         self.mod0_i2c = self.tca[4]
         self.mod1_i2c = self.tca[5]
-        try:
-            self.bme280_0 = adafruit_bme280.Adafruit_BME280_I2C(self.mod0_i2c)
-        except Exception as err:
-                self.logError('Error initializing BME280_0, '+str(err))             
-                self.bme280_0 = None
-        try:
-            self.bme280_1 = adafruit_bme280.Adafruit_BME280_I2C(self.mod1_i2c)
-        except Exception as err:
-                self.logError('Error initializing BME280_1, '+str(err))             
-                self.bme280_1 = None
-        # extra temp and humidity sensors mounted on the manifold modules to monitor inboard valve
-        # compartment temp
-        try:
-            self.aht20_0 = adafruit_ahtx0.AHTx0(self.mod0_i2c)
-        except Exception as err:
-                self.logError('Error initializing AHT Temperature sensor 0, '+str(err))             
-                self.aht20_0 = None
-        try:
-            self.aht20_1 = adafruit_ahtx0.AHTx0(self.mod1_i2c)
-        except Exception as err:
-                self.logError('Error initializing AHT Temperature sensor 1, '+str(err))             
-                self.aht20_1 = None
+        self.bme280_0 = self.initBME280(self.mod0_i2c,'0')
+        self.bme280_1 = self.initBME280(self.mod1_i2c,'1')
         self.hasPowerSensor = False
         if self.hasPowerSensor:
             # a current/voltage sensor to measure the power to the valves
@@ -151,12 +116,47 @@ class sampler():
         self.NUM_MODULES = 2
         self.EXCEPTION_RETRIES = 10
 
-    def logError(self, message, ex=''):
-        logline = datetime.datetime.now().strftime("%m/%d/%Y %H:%M:%S.%f ,")+message
+    def logError(self, message, exeption=None):
+        exType = ''
+        if exeption:
+            exType = str(type(exeption))
+        logline = datetime.datetime.now().strftime("%m/%d/%Y %H:%M:%S.%f ,")+exType+' '+message
         lf = open(self.errLogName,'a')
         lf.write(logline+'\n')
         lf.close()
     
+    def initMPRLS(self,channel, mprlsID):
+        try:
+            mprls = adafruit_mprls.MPRLS(channel)
+        except ValueError as err:
+            errStr = 'MPRLS '+mprlsID+' not responding to I2C'
+            self.logError(errStr, exeption=err)
+            self.fatalErrors+= errStr+'\n'
+            return None
+        except Exception as err:
+            errStr = 'Uncaught exception initializing MPRLS '+mprlsID+': '+type(err)
+            self.logError(errStr, exeption=err)
+            self.fatalErrors+= errStr+'\n'
+            return None
+        return mprls            
+
+    def initBME280(self,channel,bme280ID):
+        try:
+            bme280 = adafruit_bme280.Adafruit_BME280_I2C(channel)
+        except ValueError as err:
+            errStr = 'Pressure sensor BME280 '+bme280ID+' not responding to I2C'
+            print(err)
+            self.logError(errStr, exeption=err)
+            self.nonFatalErrors+= errStr+'\n'
+            return None
+        except Exception as err:
+            errStr = 'Uncaught exception initializing pressure sensor BME280 '+bme280ID+': '+type(err)
+            self.logError(errStr, exeption=err)
+            self.nonFatalErrors+= errStr+'\n'
+            return None
+        return bme280            
+            
+        
     def setValveLight(self,module,valve,color):
         vlights = [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0],[7,1],[6,1],[5,1],[4,1],[3,1],[2,1],[1,1],[0,1]]
         x = vlights[valve-1][0]
