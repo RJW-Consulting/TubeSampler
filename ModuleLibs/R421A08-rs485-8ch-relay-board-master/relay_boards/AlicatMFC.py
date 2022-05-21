@@ -190,6 +190,40 @@ class AlicatMFC(object):
 
         return True
 
+    def _reset_MFC_total(self):
+        """
+            Send relay control
+        :param relay: Relay number
+        :param cmd: Command
+        :param delay: Optional delay
+        :return: List response (int)
+        """
+
+        if not self._modbus.is_open():
+            raise ModbusException('Error: Serial port not open')
+
+        # Create binary read status
+        tx_data = [
+            self.address,  # Slave address of the MFC
+            FUNCTION_WRITE_MULTIPLE_REGISTERS,  # this is function 16
+            0x03, 0xe7,  # write starting register 1000 (command registers)
+            0X00, 0x02, 0x04,  # WRITE 2 REGISTERS, 4 bytes
+            0x00, 0x05,  # higher order setpoint register
+            0x00, 0x00,  # lower order setpoint register
+        ]
+
+        # Send command
+        self._modbus.send(tx_data)
+
+        # Wait for response with timeout
+        rx_frame = self._modbus.receive(RX_LEN_CONTROL_COMMAND)
+        
+        # Check response from relay
+        if not rx_frame or len(rx_frame) != RX_LEN_CONTROL_COMMAND:
+            return False
+
+        return True
+
     def _read_MFC_status(self):
         """
             Read statistics registers from MFC
@@ -288,6 +322,56 @@ class AlicatMFC(object):
 
         return -1
 
+    def _read_MFC_masstotal(self):
+        """
+            Read statistics registers from MFC
+            Registers are:
+                Register Number Statistic
+                1203-04 Pressure
+                1205-06 Flow Temperature
+                1207-08 Volumetric Flow
+                1209-10 Mass Flow
+                1211-12 Mass Flow Setpoint
+                1213-14 Mass Total
+        """
+
+
+        if not self._modbus.is_open():
+            raise ModbusException('Error: Serial port not open')
+
+        reg_num_h = 0x04
+        reg_num_l = 0xbc
+        # Create binary read status
+        tx_data = [
+            self._address,          # Slave address of the relay board 0..63
+            FUNCTION_READ_STATUS,   # Read status is always 0x03
+            reg_num_h, reg_num_l,            # Relay 0x0001..0x0008
+            0x00, 0x02              # Number of registers is 10 for the five double-wide registers
+        ]
+
+        # Send command and wait for response with timeout
+        self._modbus.send(tx_data)
+
+        # Wait for response with timeout
+        rx_data = self._modbus.receive(RX_LEN_READ_MASSFLOW)
+
+        if rx_data and len(rx_data) > 2:
+            # Check CRC
+            data_no_crc = rx_data[:-2]
+            crc = rx_data[-2:]
+            if self._modbus.crc(data_no_crc) != crc:
+                raise ModbusException('RX error: Incorrect CRC received')
+            elif rx_data[0] != tx_data[0]:
+                raise ModbusException('RX error: Incorrect address received')
+            elif rx_data[1] != tx_data[1]:
+                raise ModbusException('RX error: Incorrect function received')
+            elif rx_data[2] != 4:
+                raise ModbusException('RX error: Incorrect data length received')
+            else:
+                return rx_data
+
+        return -1
+
     # ----------------------------------------------------------------------------------------------
     # Public functions to control MFC
     # ----------------------------------------------------------------------------------------------
@@ -311,3 +395,12 @@ class AlicatMFC(object):
         massflow = struct.unpack('>f',data[3:7])[0]
         return massflow
 
+    def readMassTotal(self):
+        datalist = self._read_MFC_masstotal()
+        data = bytearray(datalist)
+        massflow = struct.unpack('>f',data[3:7])[0]
+        return massflow
+    
+    def resetTotal(self):
+        return self._reset_MFC_total()
+    

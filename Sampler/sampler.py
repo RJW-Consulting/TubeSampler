@@ -26,7 +26,8 @@ import adafruit_ahtx0
 import adafruit_ina219
 import datetime
 
-class sampler():
+
+class Sampler():
     def __init__(self, errLogName='/home/pi/SamplerDev/logs/SamplerErrors.log', nullValue=None):
         print('initilaizing sampler')
         self.errLogName = errLogName
@@ -115,6 +116,8 @@ class sampler():
         self.VALVES_PER_MODULE = 16
         self.NUM_MODULES = 2
         self.EXCEPTION_RETRIES = 10
+        self.tubeTotals = [0] * self.NUM_TUBES
+
 
     def logError(self, message, exeption=None):
         exType = ''
@@ -147,12 +150,12 @@ class sampler():
             errStr = 'Pressure sensor BME280 '+bme280ID+' not responding to I2C'
             print(err)
             self.logError(errStr, exeption=err)
-            self.nonFatalErrors+= errStr+'\n'
+            self.nonFatalErrors += errStr+'\n'
             return None
         except Exception as err:
             errStr = 'Uncaught exception initializing pressure sensor BME280 '+bme280ID+': '+type(err)
             self.logError(errStr, exeption=err)
-            self.nonFatalErrors+= errStr+'\n'
+            self.nonFatalErrors += errStr+'\n'
             return None
         return bme280            
             
@@ -201,7 +204,9 @@ class sampler():
         else:
             module = 0
             t = tnum
+        self.updateTubeTotals()
         self.closeAllValves()
+        self.resetSampleTotal()
         self.setValve(module,tubeValves[t-1][0],state,color)
         if pauseBetween > 0:
             time.sleep(pauseBetween)
@@ -211,8 +216,27 @@ class sampler():
         else:
             self.currTube = 0
     
+    def updateTubeTotals(self):
+        if self.currTube > 0:
+            self.tubeTotals[self.currTube-1] += self.getSampleTotal()
+            self.resetSampleTotal()
+        
     def currentTube(self):
         return self.currTube
+        
+    def getTubeTotals(self):
+        return self.tubeTotals
+    
+    def getTubeTotal(self, tube):
+        return self.tubeTotals[tube-1]
+    
+    def resetTubeTotals(self):
+        self.tubeTotals = [0] * self.NUM_TUBES
+        
+    def resetTubeTotal(self,tube):
+        self.tubeTotals[tube-1] = 0
+        
+        
         
     def setPump(self,state=False):
         if state == True:
@@ -247,7 +271,7 @@ class sampler():
                 time.sleep(0.05)
 
     def getPressure(self,sensor=0):
-        ret = -99999
+        ret = None
         try:
             if sensor == 0:
                 ret = self.mprls0.pressure
@@ -275,12 +299,12 @@ class sampler():
             if sensor == 5:
                 message = 'Error getting module 1 ambient pressure '
             self.logError(message+str(err))                
-            ret = -99999
+            ret = None
         return ret
                 
 
     def getTemperature(self,sensor=4):
-        ret = -99999
+        ret = None
         #for retry in range(1,self.EXCEPTION_RETRIES+1):
         try:
             if sensor == 4:
@@ -304,8 +328,8 @@ class sampler():
             elif sensor == 7:
                 message = 'Error getting module 1 lower temperature '
             self.logError(message+str(err))                
-            ret = -99999
-            print('Returning from temperature sensor error')
+            ret = None
+            #print('Returning from temperature sensor error')
            #self.logError('Retry #'+str(retry))
         #self.logError('getTemperature giving up.')
         return ret
@@ -337,6 +361,37 @@ class sampler():
         d['p_mod0'] = self.getPressure(4)
         d['p_mod1'] = self.getPressure(5)
         return d
+    
+    def getRawVacPressure(self):
+        return self.getPressure(0)
+    
+    def getRegVacPressure(self):
+        return self.getPressure(1)
+
+    def getClearingPressure(self):
+        return self.getPressure(2)
+
+    def getSamplePressure(self):
+        return self.getPressure(3)
+    
+    def getAmbientPressure0(self):
+        return self.getPressure(4)
+
+    def getAmbientPressure1(self):
+        return self.getPressure(5)
+
+    def getAmbientPressure(self):
+        p0 = self.getPressure(4)
+        p1 = self.getPressure(5)
+        press = None
+        if p0 and p1:
+            press = (p0 + p1) / 2
+        elif p0:
+            press = p0
+        elif p1:
+            press = p1
+        return press
+    
 
     def getAltitudes(self):
         d = {}
@@ -446,6 +501,23 @@ class sampler():
             else:
                 trying = False
 
+    def resetSampleTotal(self):
+        trying = True
+        retry = 0
+        while trying:
+            try:
+                self.mfc_sample.resetTotal()
+            except Exception as err:
+                self.logError('Error resetting sample MFC total, '+str(err))                
+                retry += 1
+                if retry > self.EXCEPTION_RETRIES:
+                    trying = False
+                    self.logError('Giving up.')
+                else:
+                    self.logError('Retry #'+str(retry))
+            else:
+                trying = False
+
         
     def getSampleFlow(self):
         trying = True
@@ -456,6 +528,25 @@ class sampler():
                 ret = self.mfc_sample.readMassFlow()
             except Exception as err:
                 self.logError('Error getting sample flow, '+str(err))                
+                retry += 1
+                if retry > self.EXCEPTION_RETRIES:
+                    trying = False
+                    self.logError('Giving up.')
+                else:
+                    self.logError('Retry #'+str(retry))
+            else:
+                trying = False
+        return ret
+
+    def getSampleTotal(self):
+        trying = True
+        retry = 0
+        ret = None
+        while trying:
+            try:
+                ret = self.mfc_sample.readMassTotal()
+            except Exception as err:
+                self.logError('Error getting sample total, '+str(err))                
                 retry += 1
                 if retry > self.EXCEPTION_RETRIES:
                     trying = False

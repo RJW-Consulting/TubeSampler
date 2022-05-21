@@ -20,8 +20,9 @@ time.sleep(0.001)
 stats = s.getSampleMFCStatus()
 
 dwellTime = 0.5
+offTime = 0.1
 
-logfilename = '/home/pi/SamplerDev/logs/valveTest_HanPS_12V_ValveReplaced.dat'
+logfilename = '/home/pi/SamplerDev/logs/valveTestClippard_20220329_2.dat'
 
 s.setClearingFlow(1.0)
 time.sleep(0.001)
@@ -32,7 +33,15 @@ try:
         s.setTube(tube,True)
         lastTime = datetime.datetime.now()
         while (datetime.datetime.now()-lastTime).total_seconds() < (dwellTime*60):
-            logline = datetime.datetime.now().strftime("%m/%d/%Y %H:%M:%S.%f ,")+str(tube)+', '+str(round(s.getSampleFlow(),1))
+            logline = datetime.datetime.now().strftime("%m/%d/%Y %H:%M:%S.%f ,")+str(tube)+', '+str(round(s.getClearingFlow(),1))+', '+str(round(s.getSampleFlow(),1))
+            print(logline)
+            f = open(logfilename,'a')
+            f.write(logline+'\n')
+            f.close()
+        s.setTube(tube,False)
+        lastTime = datetime.datetime.now()
+        while (datetime.datetime.now()-lastTime).total_seconds() < (offTime*60):
+            logline = datetime.datetime.now().strftime("%m/%d/%Y %H:%M:%S.%f ,")+str(tube)+', '+str(round(s.getClearingFlow(),1))+', '+str(round(s.getSampleFlow(),1))
             print(logline)
             f = open(logfilename,'a')
             f.write(logline+'\n')
