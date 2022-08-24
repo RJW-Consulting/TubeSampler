@@ -3,7 +3,7 @@
 """
 Created on Thu Apr  7 10:35:16 2022
 
-@author: pi
+@author: Robin Weber
 """
 
 """
@@ -17,7 +17,6 @@ within the sampling period.
 Author: Robin Weber
 Started: 4/5/2022 
 
-This is a temporary script file.
 """
 
 import datetime

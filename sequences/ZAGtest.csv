@@ -1,0 +1,4 @@
+Tube number,Sample flow [SCCM],Clearing flow [SLPM],Start date,End date,Start time,End time,Maximum volume [CC]
+5,200,1.0,,,,,1000
+1,200,1.0,,,,,10000
+2,200,1.0,,,,,10000

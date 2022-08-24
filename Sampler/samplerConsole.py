@@ -135,7 +135,7 @@ class SamplerConsole():
         self.putVal('Pmod0',ps['p_mod0'])
         self.putVal('Pmod1',ps['p_mod1'])
         ts = self.s.getTemperatures()
-        self.putVal('Tmod0',ts['t_mod0_u'])
+        self.putVal('Tmod0',ts['t_mod0_l'])
         self.putVal('Tmod1',ts['t_mod1_u'])
         self.putVal('Fclr',self.s.getClearingFlow())
         self.putVal('Fsamp',self.s.getSampleFlow())

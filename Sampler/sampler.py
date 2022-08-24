@@ -22,8 +22,8 @@ from adafruit_neotrellis.multitrellis import MultiTrellis
 import adafruit_mprls
 import adafruit_tca9548a
 import adafruit_bme280
-import adafruit_ahtx0
 import adafruit_ina219
+import adafruit_ahtx0
 import datetime
 
 
@@ -88,14 +88,19 @@ class Sampler():
         # modules
         self.mod0_i2c = self.tca[4]
         self.mod1_i2c = self.tca[5]
-        self.bme280_0 = self.initBME280(self.mod0_i2c,'0')
-        self.bme280_1 = self.initBME280(self.mod1_i2c,'1')
+        #self.bme280_0 = self.initBME280(self.mod0_i2c,'0')
+        #self.bme280_1 = self.initBME280(self.mod1_i2c,'1')
+        try:
+            self.aht20_0 = adafruit_ahtx0.AHTx0(self.mod0_i2c)
+        except:
+            self.aht20_0 = None
         self.hasPowerSensor = False
         if self.hasPowerSensor:
             # a current/voltage sensor to measure the power to the valves
             self.ina219_0 = adafruit_ina219.INA219(self.i2c)
         # Now for the manifold valve relay boards.  Declare the serial port for the MODBUS
-        SERIAL_PORT = '/dev/ttyS0'
+        #SERIAL_PORT = '/dev/ttyS0'
+        SERIAL_PORT = '/dev/ttyAMA0'
         # Create MODBUS object
         self._modbus = relay_modbus.Modbus(serial_port=SERIAL_PORT)
         # Open serial port
@@ -174,7 +179,7 @@ class Sampler():
         
 
 
-    def setValve(self,module, vnum, state, color=None):
+    def setValve(self,module, vnum, state, color=None, setPower=True):
         if color == None:
             color = self.colors['BLUE']
         if module == 0:
@@ -183,11 +188,13 @@ class Sampler():
             rboard = self.valveBoard1
         if state:
             rboard.on(vnum)
-            self.setValvePower(True)
+            if setPower:
+                self.setValvePower(True)
             self.setValveLight(module,vnum,color)
         else:
             rboard.off(vnum)
-            self.setValvePower(False)
+            if setPower:
+                self.setValvePower(False)
             self.setValveLight(module,vnum,self.colors['OFF'])
             
     def closeAllValves(self):
@@ -196,21 +203,24 @@ class Sampler():
                 self.setValve(m,v,False)
         
 
-    def setTube(self, tnum, state, color=None, pauseBetween=0):
-        tubeValves = [[1,16],[2,15],[3,14],[4,13],[5,12],[6,11],[7,10],[8,9]]
+    def setTube(self, tnum, state, color=None, pauseBetween=0, downstreamOnly=False):
+        tubeValves = [[16,1],[15,2],[14,3],[13,4],[12,5],[11,6],[10,7],[9,8]]
         if tnum > self.TUBES_PER_MODULE:
             module = 1
             t = tnum - self.TUBES_PER_MODULE
         else:
             module = 0
             t = tnum
+        self.setValvePower(False)
         self.updateTubeTotals()
         self.closeAllValves()
         self.resetSampleTotal()
-        self.setValve(module,tubeValves[t-1][0],state,color)
+        if not downstreamOnly:
+            self.setValve(module,tubeValves[t-1][0],state,color,setPower=False)
         if pauseBetween > 0:
             time.sleep(pauseBetween)
-        self.setValve(module,tubeValves[t-1][1],state,color)
+        self.setValve(module,tubeValves[t-1][1],state,color,setPower=False)
+        self.setValvePower(True)
         if state:
             self.currTube = tnum
         else:
@@ -312,8 +322,7 @@ class Sampler():
             if sensor == 5:
                 ret = self.bme280_1.temperature
             if sensor == 6:
-                #ret = self.aht20_0.temperature
-                ret = -99
+                ret = self.aht20_0.temperature
             if sensor == 7:
                 #ret = self.aht20_1.temperature
                 ret = -99

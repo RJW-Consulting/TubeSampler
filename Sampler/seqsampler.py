@@ -74,19 +74,25 @@ con = SamplerConsole(s)
 doTubes =[1,2,3,4,5,6,7,8,9,10,12,13,14,15,16]  # tube 11 is dead for now
 
 def logLine():
-    header = 'time,Pvac,Preg,Pclearing,Psample,clearingFlow,sampleFlow,tube,total1,total2,total3,total4,total5,total6,total7,total8,total9,total10,total11,total12,total13,total14,total15,total16'
+    header = 'time,Pvac,Preg,Pclearing,Psample,Tsampler,clearingFlow,sampleFlow,tube,total1,total2,total3,total4,total5,total6,total7,total8,total9,total10,total11,total12,total13,total14,total15,total16'
     pressures = s.getPressures()
+    temperatures = s.getTemperatures()
     pVac = round(pressures['p_vac'],0)
     pReg = round(pressures['p_reg'],0)
     pClear = round(pressures['p_clear'],0)
     pSamp = round(pressures['p_samp'],0)
+    t=temperatures['t_mod0_l']
+    if t:
+        tSamp = round(t,1)
+    else:
+        tSamp = '***'
     clearingFlow = round(s.getClearingFlow(),1)
     sampleFlow = round(s.getSampleFlow(),1)
     tube = s.currentTube()
     totals = s.getTubeTotals()
     totals = [round(x,1) for x in totals]
     time = datetime.now().strftime("%m/%d/%Y %H:%M:%S.%f")
-    line = f'{time},{pVac},{pReg},{pClear},{pSamp},{clearingFlow},{sampleFlow},{tube},{totals[0]},{totals[1]},{totals[2]},{totals[3]},{totals[4]},{totals[5]},{totals[6]},{totals[7]},{totals[8]},{totals[9]},{totals[10]},{totals[11]},{totals[12]},{totals[13]},{totals[14]},{totals[15]}'
+    line = f'{time},{pVac},{pReg},{pClear},{pSamp},{tSamp},{clearingFlow},{sampleFlow},{tube},{totals[0]},{totals[1]},{totals[2]},{totals[3]},{totals[4]},{totals[5]},{totals[6]},{totals[7]},{totals[8]},{totals[9]},{totals[10]},{totals[11]},{totals[12]},{totals[13]},{totals[14]},{totals[15]}'
     return line,header
 
 def lineToLogFile(logline):
@@ -117,7 +123,9 @@ con.clear()
 try:
     while not done:
         newTube,clearingFlow,sampleFlow = seq.currentTubeAndFlows()
-        if newTube != tube:
+        if newTube == 0:
+            s.setTube(tube,False)
+        elif newTube != tube:
             tube = newTube
             s.setClearingFlow(clearingFlow)
             s.setSampleFlow(sampleFlow)
