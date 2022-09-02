@@ -3,13 +3,19 @@
 """
 Created on Thu Sep  1 11:48:27 2022
 
-@author: pi
+@author: Robin Weber
+
+Sequential Tube Sampler Keypad Driver 
 """
 import board
 import digitalio
 import adafruit_pcf8574
+import keyboard
+import time
+import datetime
 
-print("PCF8574 keypad test")
+REPEAT_TIME = 0.1
+TIME_TO_REPEAT = 0.5
 
 i2c = board.I2C()
 pcf0 = adafruit_pcf8574.PCF8574(i2c,address=0x20)
@@ -31,12 +37,12 @@ colports0 = [pcf0.get_pin(n) for n in cols0]
 rowports1 = [pcf1.get_pin(n) for n in rows1]
 colports1 = [pcf1.get_pin(n) for n in cols1]
 
-upper_map = [['1','2','3','UP'],
-             ['4','5','6','DOWN'],
-             ['7','8','9','LEFT'],
-             ['.','0','ENTER','RIGHT']]
+upper_map = [['1','2','3','up'],
+             ['4','5','6','down'],
+             ['7','8','9','left'],
+             ['.','0','enter','right']]
 
-lower_map = ['Fn1','Fn2','Fn3','Fn4']
+lower_map = ['enter','delete','backspace','tab']
 
 for port in rowports0:
     port.switch_to_output(value=True)
@@ -73,9 +79,42 @@ def scanForKey():
        rowports1[r].value = True
    return upperKey,lowerKey
 
+def pressKey(upper,lower):
+    if upper:
+        keyboard.press_and_release(upper)
+    if lower:
+        keyboard.press_and_release(lower)
+
+    
+held = False
+firstPress = True
+firstDownTime = None
+lastUpper = None
+lastLower = None
+    
 while not done:
     upper,lower = scanForKey()
-    if upper:
-        print('Upper keyped: '+upper)
-    if lower:
-        print('Lower keyped: '+lower)
+    if not upper and not lower:
+        held = False
+        firstDownTime = None
+        lastUpper = lastLower = None
+        firstPress = True
+        continue
+    else:
+        if not held:
+            firstDownTime = datetime.datetime.now()
+    if (lastUpper == upper) and (lastLower == lower):
+        held = True
+    if firstPress:
+        pressKey(upper,lower)
+        lastUpper = upper
+        lastLower = lower
+        firstPress = False
+    if held and (datetime.datetime.now() - firstDownTime).total_seconds() < TIME_TO_REPEAT:
+        continue
+    if held:
+        pressKey(upper,lower)
+        lastUpper = upper
+        lastLower = lower
+        time.sleep(REPEAT_TIME)
+     
